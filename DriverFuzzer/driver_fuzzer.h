@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <unordered_set>
 
 #include <windows.h>
 
@@ -11,24 +12,43 @@ class DriverFuzzer {
 
  public:
   DriverFuzzer(std::string sDriverName);
+  ~DriverFuzzer();
 
-  BOOL AutoFuzzing();
+  BOOL IsOpen() const;
 
-  ~DriverFuzzer() = default;
-
- private:
-  enum class LOG_STATUS { LOG_INFO, LOG_ERR };
-
-  void _LogErrorCode(std::string sErrorMsg, DWORD dwErrorCode);
-  void _Log(std::string sMsg, LOG_STATUS dwStatus = LOG_STATUS::LOG_INFO);
-  const std::string _GetCTLCODEMessage(
+  BOOL AutoFuzzIOCTLs();
+  BOOL AutoFuzzIOCTLBuffer(
+    DWORD dwDeviceType,
     DWORD dwFunction,
     DWORD dwMethod,
     DWORD dwAccess
   );
 
-  std::string m_sDriverName;
+ private:
+  enum class LOG_STATUS { LOG_INFO, LOG_ERR };
 
+  VOID _CheckIOCTL(
+    DWORD dwDeviceType,
+    DWORD dwFunction,
+    DWORD dwMethod,
+    DWORD dwAccess,
+    LPVOID lpInputBuffer,
+    DWORD dwInputBufferSize,
+    LPVOID lpOutputBuffer,
+    DWORD dwOutputBufferSize,
+    const std::unordered_set<DWORD>& usSkippableErrors
+  );
+
+  VOID _LogErrorCode(std::string sErrorMsg, DWORD dwErrorCode) const ;
+  VOID _Log(std::string sMsg, LOG_STATUS dwStatus = LOG_STATUS::LOG_INFO) const;
+  const std::string _GetCTLCODEMessage(
+    DWORD dwDeviceType,
+    DWORD dwFunction,
+    DWORD dwMethod,
+    DWORD dwAccess
+  ) const;
+
+  HANDLE m_hDriver;
 };
 } // namespace MyProgram
 
