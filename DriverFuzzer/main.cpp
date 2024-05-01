@@ -54,6 +54,7 @@ int main(int argc, const char** argv) {
     break;
 
     case 3:
+      fuzzer.ExploitVulnerability();
       break;
     }
 

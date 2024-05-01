@@ -24,6 +24,8 @@ class DriverFuzzer {
     DWORD dwAccess
   );
 
+  VOID ExploitVulnerability();
+
  private:
   enum class LOG_STATUS { LOG_INFO, LOG_ERR };
 
